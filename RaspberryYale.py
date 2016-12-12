@@ -1,11 +1,12 @@
 from os.path import expanduser
+from time import sleep
 from apiclient import discovery, errors
 from httplib2 import Http
 from oauth2client import file, client, tools
 homeDir = expanduser('~')
 
-def ListMessages(service, user_id, sender=None, subject=None, newer_than=None, text=None):
-  query = None
+def listMessages(service, user_id, sender=None, subject=None, newer_than=None, text=None):
+  query = ''
   if sender:
     query = 'from:' + sender
   if subject:
@@ -30,23 +31,49 @@ def ListMessages(service, user_id, sender=None, subject=None, newer_than=None, t
   except errors.HttpError, error:
     print 'An error occurred: %s' % error
   
+def checkMessages(service, GotMessageIDs=[]):
+  messages = listMessages(service, 'me', sender='report@yalehomesystem.co.uk', subject='"Yale Home Notification"', newer_than='1d', text='"Burglar From Account"')
+  if messages:
+    message = messages[-1];
+    messageID = message['id']
+    if messageID not in GotMessageIDs:
+      print "You're being robbed!"
+      return messageID
+  testmessages = listMessages(GMAIL, 'me', newer_than='1d', text='"RaspberryYale System Test"')
+  if testmessages:
+    message = testmessages[-1];
+    messageID = message['id']
+    if messageID not in GotMessageIDs:
+      print "The test worked!"
+      return messageID
+    else:
+      print "Nothing to report at TTTTTT"
+  return None
 
+if __name__ == '__main__':
 
-# Want read only access to my 'stuff' gmail account.
-SCOPES = 'https://www.googleapis.com/auth/gmail.readonly'
+  # Want read only access to my 'stuff' gmail account.
+  SCOPES = 'https://www.googleapis.com/auth/gmail.readonly'
 
-# Get the OAuth2 credentials
-secretFile =  homeDir + '/.api/AlphonsoOak.json'
-store = file.Storage('storage.json')
-creds = store.get()
-if not creds or creds.invalid:
-  flow = client.flow_from_clientsecrets(secretFile, SCOPES)
-  creds = tools.run_flow(flow, store)
+  # Get the OAuth2 credentials
+  secretFile =  homeDir + '/.api/AlphonsoOak.json'
+  store = file.Storage('storage.json')
+  creds = store.get()
+  if not creds or creds.invalid:
+    flow = client.flow_from_clientsecrets(secretFile, SCOPES)
+    creds = tools.run_flow(flow, store)
 
-# Get the stuff!
-GMAIL = discovery.build('gmail', 'v1', http=creds.authorize(Http()))
+  # Create the gmail service
+  GMAIL = discovery.build('gmail', 'v1', http=creds.authorize(Http()))
 
-# Now check the messages to see if any "Burglar" messages have been sent.
-messages = ListMessages(GMAIL, 'me', sender='report@yalehomesystem.co.uk', subject='"Yale Home Notification"', newer_than='1m', text='"Burglar From Account"')
-  
-print messages
+  triggeredMessages = []
+  # Now, continuesly check the messages to see if any "Burglar" messages have been sent.
+  while True:
+    # Sleep for 20 seconds. Do this first to ensure that, no matter what, the
+    # infinite loop doesn't crash the email server.
+    sleep(5)
+    messageID = checkMessages(GMAIL, GotMessageIDs=triggeredMessages)
+    if messageID:
+      print messageID
+      triggeredMessages.append(messageID)
+    
