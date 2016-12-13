@@ -1,5 +1,8 @@
+from __future__ import print_function
+from sys import stdout
 from os.path import expanduser
 from time import sleep
+from datetime import datetime
 from apiclient import discovery, errors
 from httplib2 import Http
 from oauth2client import file, client, tools
@@ -29,29 +32,28 @@ def listMessages(service, user_id, sender=None, subject=None, newer_than=None, t
     
     return messages
   except errors.HttpError, error:
-    print 'An error occurred: %s' % error
+    print('An error occurred: %s' % error)
   
 def checkMessages(service, GotMessageIDs=[]):
   messages = listMessages(service, 'me', sender='report@yalehomesystem.co.uk', subject='"Yale Home Notification"', newer_than='1d', text='"Burglar From Account"')
   if messages:
-    message = messages[-1];
+    message = messages[1];
     messageID = message['id']
     if messageID not in GotMessageIDs:
-      print "You're being robbed!"
-      return messageID
+      return messageID, 'Real'
   testmessages = listMessages(GMAIL, 'me', newer_than='1d', text='"RaspberryYale System Test"')
+  #print(testmessages)
+  #print(' ')
   if testmessages:
-    message = testmessages[-1];
+    message = testmessages[1]
     messageID = message['id']
     if messageID not in GotMessageIDs:
-      print "The test worked!"
-      return messageID
-    else:
-      print "Nothing to report at TTTTTT"
-  return None
+      #print('sssss')
+      return messageID, 'Test'
+  return None, None
 
 if __name__ == '__main__':
-
+  print('Programme started on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')))
   # Want read only access to my 'stuff' gmail account.
   SCOPES = 'https://www.googleapis.com/auth/gmail.readonly'
 
@@ -67,13 +69,28 @@ if __name__ == '__main__':
   GMAIL = discovery.build('gmail', 'v1', http=creds.authorize(Http()))
 
   triggeredMessages = []
-  # Now, continuesly check the messages to see if any "Burglar" messages have been sent.
+  # Check the messages once, and do nothing with what you find (so that messages
+  # that exist when the code was started do not trigger any thing.)
+  messageID, messageType = checkMessages(GMAIL, GotMessageIDs=triggeredMessages)
+  if messageID:
+    triggeredMessages.append(messageID)
+  # Now, continuesly check the messages to see if any "Burglar" messages have been sent.  
   while True:
-    # Sleep for 20 seconds. Do this first to ensure that, no matter what, the
+    # Sleep for 5 seconds. Do this first to ensure that, no matter what, the
     # infinite loop doesn't crash the email server.
     sleep(5)
-    messageID = checkMessages(GMAIL, GotMessageIDs=triggeredMessages)
+    messageID, messageType = checkMessages(GMAIL, GotMessageIDs=triggeredMessages)
     if messageID:
-      print messageID
-      triggeredMessages.append(messageID)
+      triggeredMessages.append(messageID)      
+      print('')
+      print('Trigger email detected on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')))
+      if messageType == 'Real':
+        print('Caught a burgler.')
+      elif messageType == 'Test':
+        print('Test message detected.')
+    else:
+      print('Checked and found nothing on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')), end='\r')
+      stdout.flush()
+        
+      
     
