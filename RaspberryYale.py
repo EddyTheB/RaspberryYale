@@ -25,6 +25,10 @@ def checkInternet(host="8.8.8.8", port=53, timeout=3):
   except: #Exception as ex:
     #print(ex.message)
     return False
+    
+def createServiceGMAIL():
+  a = discovery.build('gmail', 'v1', http=creds.authorize(Http()))
+  return a
 
 def listMessages(service, user_id, sender=None, subject=None, newer_than=None, text=None):
   query = ''
@@ -43,10 +47,10 @@ def listMessages(service, user_id, sender=None, subject=None, newer_than=None, t
     if 'messages' in response:
       messages.extend(response['messages'])
     
-    while 'nextPageToken' in response:
-      page_token = response['nextPageToken'] # I think this line tells code to go to next message.
-      response = GMAIL.users().messages().list(userId='me').execute()
-      messages.extend(response['messages'])
+    #while 'nextPageToken' in response:
+    #  page_token = response['nextPageToken'] # I think this line tells code to go to next message.
+    #  response = service.users().messages().list(userId='me').execute()
+    #  messages.extend(response['messages'])
     
     return messages
   except errors.HttpError, error:
@@ -84,6 +88,13 @@ def takePhotos(minutes, directory, timeBetweenPhotos=1):
     sleep(timeBetweenPhotos)
     takePhoto(cam, directory)
     NumPhotos += 1
+    if NumPhotos%10 == 0:
+      # Every 10 photos, upload to dropbox.
+      # Ideally I'd just install dropbox and ensure that the appropriate
+      # directory was symbolically linked to dropbox, but unfortunately dropbox
+      # is not available for the RaspberryPI (or atleast, not for Raspbian), so
+      # this next step is neccesary.
+      pass
   cam.stop()
   print('Done. Took {} photos.'.format(NumPhotos))
   
@@ -112,7 +123,7 @@ if __name__ == '__main__':
   if not gotInternet:
     print('No internet connection.')
     exit()
-  GMAIL = discovery.build('gmail', 'v1', http=creds.authorize(Http()))
+  GMAIL = createServiceGMAIL()
 
   # Define a save directory
   saveDirectory = homeDir + '/Pictures/Apps/RaspberryYale'
@@ -139,15 +150,15 @@ if __name__ == '__main__':
         print('No internet connection available on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')))
         gotInternet = False
         saveDirectory_ = '{}/R{}_IntDown'.format(saveDirectory, datetime.now().strftime('%Y%m%d%H%M%S'))
-        takePhotos(TakePhotosFor, saveDirectory_) # Take photos for 5 minutes, and then check again.
-        TimesIntDown = 1
+        takePhotos(TakePhotosFor, saveDirectory_, timeBetweenPhotos=1) # Take photos for set period, and then check again.
+        NumPhotoLoops = 1        
       else:
         print('Still no internet connection available on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')), end='\r')
-        TimesIntDown += 1
-        if TimesIntDown <= 3:
+        NumPhotoLoops += 1
+        timeBetweenPhotos = 2**(NumPhotoLoops-1)
+        if timeBetweenPhotos <= TakePhotosFor*60:
           saveDirectory_ = '{}/R{}_IntDown'.format(saveDirectory, datetime.now().strftime('%Y%m%d%H%M%S'))
-          takePhotos(TakePhotosFor, saveDirectory_) # Do this a maximum of 3 times (for 15 minutes) total
-                        # to avoid filling the memory card.
+          takePhotos(TakePhotosFor, saveDirectory_, timeBetweenPhotos=timeBetweenPhotos)
     else:
       gotInternet = True
       if messageID:
@@ -159,6 +170,9 @@ if __name__ == '__main__':
         elif messageType == 'Test':
           print('Test message detected.')
           saveDirectory_ = '{}/R{}_Test'.format(saveDirectory, datetime.now().strftime('%Y%m%d%H%M%S'))
+          
+        
+        
         takePhotos(TakePhotosFor, saveDirectory_)
       else:
         print('Checked and found nothing on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')), end='\r')      
