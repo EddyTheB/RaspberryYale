@@ -9,6 +9,7 @@ from httplib2 import Http
 from oauth2client import file, client, tools
 import socket
 from pygame import camera, image
+import re
 homeDir = expanduser('~')
 
 def checkInternet(host="8.8.8.8", port=53, timeout=3):
@@ -47,10 +48,11 @@ def listMessages(service, user_id, sender=None, subject=None, newer_than=None, t
     if 'messages' in response:
       messages.extend(response['messages'])
     
-    #while 'nextPageToken' in response:
-    #  page_token = response['nextPageToken'] # I think this line tells code to go to next message.
-    #  response = service.users().messages().list(userId='me').execute()
-    #  messages.extend(response['messages'])
+    while 'nextPageToken' in response:
+      page_token = response['nextPageToken'] # I think this line tells code to go to next message.
+      response = service.users().messages().list(userId=user_id, q=query,
+                                         pageToken=page_token).execute()
+      messages.extend(response['messages'])
     
     return messages
   except errors.HttpError, error:
@@ -66,6 +68,7 @@ def checkMessages(service, GotMessageIDs=[]):
     if messageID not in GotMessageIDs:
       return messageID, 'Real'
   testmessages = listMessages(GMAIL, 'me', newer_than='1d', text='"RaspberryYale System Test"')
+  
   if testmessages:
     message = testmessages[1]
     messageID = message['id']
@@ -73,6 +76,72 @@ def checkMessages(service, GotMessageIDs=[]):
       return messageID, 'Test'
   return None, None
   
+def assessAlarmStatus(service):
+  if not checkInternet():
+    return 'NoInternet'
+  messageTypes = {}
+  allowedSenders = ['report@yalehomesystem.co.uk', 'me']
+  allowedSubjects = ['Yale Home Notification', 'RaspberryYale Test']
+  messageTypes['TestStart'] = 'RaspberryYale System Test - Start'
+  messageTypes['TestEnd'] = 'RaspberryYale System Test - End'
+  messageTypes['DisArm'] = 'Disarm From Account'
+  messageTypes['HomeArm'] = 'Home Arm From Account'
+  messageTypes['Arm'] = 'Arm From Account'
+  messageTypes['Burglar'] = 'Burglar From Account'
+  TestOrder = ["Burglar", "DisArm", "Arm", "HomeArm", "TestEnd", "TestStart"]
+
+  includeTestType = True
+  # Get all messages.
+  messages = listMessages(service, 'me')
+  for message in messages:
+    messageID = message['id']
+    messageGot = service.users().messages().get(userId='me', id=messageID).execute()
+
+    # Ensure that the sender is one of the allowed Senders.
+    # Ensure that the Subject is one of the allowd Subjects.
+    # If not either of those, then look at the next email untill one is found.
+    # Then go through the messageTypes, to see what type it is.
+    # if type is found to be 'TestEnd' then go to last non-test type.
+    # otherwise, set status to be type found.
+    From = 'Unknown'
+    Subject = 'Unknown'
+    for header in messageGot['payload']['headers']:
+      if header['name'] == u'X-Sender':
+        From = header['value']
+      if header['name'] == u'To':
+        To = header['value']
+      elif header['name'] == u'Subject':
+        Subject = header['value']
+    #print(messageID)
+    #print(From)
+    #print(To)
+    #print(Subject)
+    #print(messageGot['snippet'])
+    if From == To:
+      From = 'me'
+      
+    if From in allowedSenders:
+      if Subject in allowedSubjects:
+        # Check snippet contents. They're short emails so the snippets are plenty.
+        Snippet = messageGot['snippet']
+        for Test in TestOrder:
+          testStr = messageTypes[Test]
+          match = re.search(testStr, Snippet)
+          if match:
+            Type = Test
+            if Type == 'TestEnd':
+              includeTestType = False
+              continue
+            elif Type == 'TestStart':
+              if includeTestType:
+                return Type
+              else:
+                continue
+            else:
+              return Type
+          else:
+            continue
+      
 def takePhotos(minutes, directory, timeBetweenPhotos=1):
   print('Taking 1 photo every {} seconds for {} minutes.'.format(timeBetweenPhotos, minutes))
   print('And saving them to {}.'.format(directory))
@@ -125,6 +194,9 @@ if __name__ == '__main__':
     exit()
   GMAIL = createServiceGMAIL()
 
+  status = assessAlarmStatus(GMAIL)
+  print(status)
+  exit()
   # Define a save directory
   saveDirectory = homeDir + '/Pictures/Apps/RaspberryYale'
 
