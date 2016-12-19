@@ -3,7 +3,7 @@ from sys import stdout
 from os import makedirs
 from os.path import expanduser, exists
 from time import sleep
-from datetime import datetime,timedelta
+from datetime import datetime, timedelta
 from apiclient import discovery, errors
 from httplib2 import Http
 from oauth2client import file, client, tools
@@ -78,9 +78,9 @@ def checkMessages(service, GotMessageIDs=[]):
   
 def assessAlarmStatus(service):
   if not checkInternet():
-    return 'NoInternet'
+    return 'NoInternet', None
   messageTypes = {}
-  allowedSenders = ['report@yalehomesystem.co.uk', 'me']
+  #allowedSenders = ['report@yalehomesystem.co.uk', 'me']
   allowedSubjects = ['Yale Home Notification', 'RaspberryYale Test']
   messageTypes['TestStart'] = 'RaspberryYale System Test - Start'
   messageTypes['TestEnd'] = 'RaspberryYale System Test - End'
@@ -103,24 +103,27 @@ def assessAlarmStatus(service):
     # Then go through the messageTypes, to see what type it is.
     # if type is found to be 'TestEnd' then go to last non-test type.
     # otherwise, set status to be type found.
-    From = 'Unknown'
+    #From = 'Unknown'
     Subject = 'Unknown'
     for header in messageGot['payload']['headers']:
-      if header['name'] == u'X-Sender':
-        From = header['value']
-      if header['name'] == u'To':
-        To = header['value']
-      elif header['name'] == u'Subject':
+      #print(header['name'], ' : ', header['value'])
+      #if header['name'] == u'X-Sender':
+      #  From = header['value']
+      #if header['name'] == u'To':
+      #  To = header['value']
+      if header['name'] == u'Subject':
         Subject = header['value']
-    #print(messageID)
-    #print(From)
-    #print(To)
-    #print(Subject)
-    #print(messageGot['snippet'])
-    if From == To:
-      From = 'me'
+      elif header['name'] == u'Date':
+        Date = header['value']
+    #if From == To:
+    #  From = 'me'
+    #print(Date[:25])
+    #print(datetime.now().strftime('%a, %d %b %Y %H:%M:%S %z'))
+    #print('ssss')
+    Date = datetime.strptime(Date[:25], '%a, %d %b %Y %H:%M:%S')
+    Age = datetime.now() - Date
       
-    if From in allowedSenders:
+    if True: #From in allowedSenders:
       if Subject in allowedSubjects:
         # Check snippet contents. They're short emails so the snippets are plenty.
         Snippet = messageGot['snippet']
@@ -134,27 +137,27 @@ def assessAlarmStatus(service):
               continue
             elif Type == 'TestStart':
               if includeTestType:
-                return Type
+                return Type, Age
               else:
                 continue
             else:
-              return Type
+              return Type, Age
           else:
             continue
       
-def takePhotos(minutes, directory, timeBetweenPhotos=1):
-  print('Taking 1 photo every {} seconds for {} minutes.'.format(timeBetweenPhotos, minutes))
-  print('And saving them to {}.'.format(directory))
+def takePhotos(directory, timeBetween=1, timeFor=60):
+  print('Taking 1 photo every {} seconds for up to {} seconds.'.format(timeBetween, timeFor))
+  print('Saving them to {}.'.format(directory))
   if not exists(directory):
     makedirs(directory)
-  TimeEnd = datetime.now() + timedelta(minutes=minutes) 
+  TimeEnd = datetime.now() + timedelta(seconds=timeFor) 
   camera.init()
   cam = camera.Camera(camera.list_cameras()[0])
   cam.start()
   takePhoto(cam, directory)
   NumPhotos = 1
   while datetime.now() < TimeEnd:
-    sleep(timeBetweenPhotos)
+    sleep(timeBetween)
     takePhoto(cam, directory)
     NumPhotos += 1
     if NumPhotos%10 == 0:
@@ -175,7 +178,9 @@ def takePhoto(cam, directory):
 if __name__ == '__main__':
   print('Programme started on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')))
   
-  TakePhotosFor = 1 # Minutes
+  takePhotosFor = 1 # Minutes
+  cancelTime = 10   # Minutes
+  maxAge = timedelta(minutes=cancelTime) 
   # Want read only access to my 'stuff' gmail account.
   SCOPES = 'https://www.googleapis.com/auth/gmail.readonly'
 
@@ -194,61 +199,44 @@ if __name__ == '__main__':
     exit()
   GMAIL = createServiceGMAIL()
 
-  status = assessAlarmStatus(GMAIL)
-  print(status)
-  exit()
   # Define a save directory
   saveDirectory = homeDir + '/Pictures/Apps/RaspberryYale'
 
-  triggeredMessages = []
-  # Check the messages once, and do nothing with what you find (so that messages
-  # that exist when the code was started do not trigger any thing.)
-  messageID, messageType = checkMessages(GMAIL, GotMessageIDs=triggeredMessages)
-  if messageID:
-    triggeredMessages.append(messageID)
-  # Now, continuesly check the messages to see if any "Burglar" messages have been sent.  
+  statusTimes = 0
+  statusLast = 'random'
   while True:
     # Sleep for 5 seconds. Do this first to ensure that, no matter what, the
     # infinite loop doesn't crash the email server.
     sleep(5)
-    messageID, messageType = checkMessages(GMAIL, GotMessageIDs=triggeredMessages)
-    if messageType == 'NoInternet':
-      # Not connected to the internet. This potentially means that thieves have
-      # cut my broadband connection in order to disable the alarm system. So we
-      # want to take photos, they will be saved locally only but atleast it 
-      # might be possible to recover them at a latter date, if the thieves don't
-      # nick the raspberry pi too!
-      if gotInternet:    
-        print('No internet connection available on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')))
-        gotInternet = False
-        saveDirectory_ = '{}/R{}_IntDown'.format(saveDirectory, datetime.now().strftime('%Y%m%d%H%M%S'))
-        takePhotos(TakePhotosFor, saveDirectory_, timeBetweenPhotos=1) # Take photos for set period, and then check again.
-        NumPhotoLoops = 1        
-      else:
-        print('Still no internet connection available on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')), end='\r')
-        NumPhotoLoops += 1
-        timeBetweenPhotos = 2**(NumPhotoLoops-1)
-        if timeBetweenPhotos <= TakePhotosFor*60:
-          saveDirectory_ = '{}/R{}_IntDown'.format(saveDirectory, datetime.now().strftime('%Y%m%d%H%M%S'))
-          takePhotos(TakePhotosFor, saveDirectory_, timeBetweenPhotos=timeBetweenPhotos)
-    else:
-      gotInternet = True
-      if messageID:
-        triggeredMessages.append(messageID)      
-        print('\nTrigger email detected on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')))
-        if messageType == 'Real':
-          print('Caught a burgler.')
-          saveDirectory_ = '{}/R{}_Burgler'.format(saveDirectory, datetime.now().strftime('%Y%m%d%H%M%S'))
-        elif messageType == 'Test':
-          print('Test message detected.')
-          saveDirectory_ = '{}/R{}_Test'.format(saveDirectory, datetime.now().strftime('%Y%m%d%H%M%S'))
-          
-        
-        
-        takePhotos(TakePhotosFor, saveDirectory_)
-      else:
-        print('Checked and found nothing on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')), end='\r')      
-    stdout.flush()
-        
+    # Check the alarm status.
+    try:
+      status, age = assessAlarmStatus(GMAIL)
+    except Exception as E:
+      print(type(E))
+      print(E.args)
+      print(E)
+      raise(E)
       
-    
+    if (age > maxAge) or (status in ["DisArm", "Arm", "HomeArm", "TestEnd"]):
+      # Nothing happening, carry on.
+      print('Checked and found nothing on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')), end='\r')      
+      statusTimes = 0
+    else:
+      if status == "Burglar":
+        print('\nBurglar detected on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')))        
+        saveDirectory_N = '{}/R{}_Burgler'.format(saveDirectory, datetime.now().strftime('%Y%m%d%H%M%S'))
+      elif status == "TestStart":
+        print('\nTest message detected on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')))
+        saveDirectory_N = '{}/R{}_Test'.format(saveDirectory, datetime.now().strftime('%Y%m%d%H%M%S'))      
+      elif status == "NoInternet":
+        print('\nInternet Down on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')))
+        saveDirectory_N = '{}/R{}_IntDown'.format(saveDirectory, datetime.now().strftime('%Y%m%d%H%M%S'))
+      print(status, statusLast)
+      if statusLast == status:
+        statusTimes += 1
+      else:
+        saveDirectoryToUse = saveDirectory_N;
+      takePhotos(saveDirectoryToUse, timeBetween=2**statusTimes, timeFor=takePhotosFor*60)
+    stdout.flush()
+    statusLast = status;
+        
