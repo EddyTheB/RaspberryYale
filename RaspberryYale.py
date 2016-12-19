@@ -221,6 +221,7 @@ if __name__ == '__main__':
       # Nothing happening, carry on.
       print('Checked and found nothing on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')), end='\r')      
       statusTimes = 0
+      statusLast = 'random'
     else:
       if status == "Burglar":
         print('\nBurglar detected on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')))        
