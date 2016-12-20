@@ -11,3 +11,6 @@ This great blog post, and the couple of posts before it: http://wescpy.blogspot.
 The gmail API documentation, especially the code snippets: https://developers.google.com/gmail/api/v1/reference/
 
 The checkInternet function is entirely thanks to 7h3rAm's answer to this question: http://stackoverflow.com/questions/3764291/checking-network-connection
+
+### For dropbox upload stuff
+http://raspi.tv/2013/how-to-use-dropbox-with-raspberry-pi
