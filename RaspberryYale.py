@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from apiclient import discovery, errors
 from httplib2 import Http
 from oauth2client import file, client, tools
-import socket
+import socket, ssl
 from pygame import camera, image
 import re
 homeDir = expanduser('~')
@@ -28,6 +28,7 @@ def checkInternet(host="8.8.8.8", port=53, timeout=3):
     return False
     
 def createServiceGMAIL():
+  print('Creating new GMAIL service.')
   a = discovery.build('gmail', 'v1', http=creds.authorize(Http()))
   return a
 
@@ -78,7 +79,7 @@ def checkMessages(service, GotMessageIDs=[]):
   
 def assessAlarmStatus(service):
   if not checkInternet():
-    return 'NoInternet', None
+    return 'NoInternet', timedelta(minutes=0)
   messageTypes = {}
   #allowedSenders = ['report@yalehomesystem.co.uk', 'me']
   allowedSubjects = ['Yale Home Notification', 'RaspberryYale Test']
@@ -146,7 +147,10 @@ def assessAlarmStatus(service):
             continue
       
 def takePhotos(directory, timeBetween=1, timeFor=60):
-  print('Taking 1 photo every {} seconds for up to {} seconds.'.format(timeBetween, timeFor))
+  if timeBetween > timeFor:
+    print('Taking 1 photo and pausing for {} seconds.'.format(timeFor))
+  else:
+    print('Taking 1 photo every {} seconds for up to {} seconds.'.format(timeBetween, timeFor))
   print('Saving them to {}.'.format(directory))
   if not exists(directory):
     makedirs(directory)
@@ -156,24 +160,32 @@ def takePhotos(directory, timeBetween=1, timeFor=60):
   cam.start()
   takePhoto(cam, directory)
   NumPhotos = 1
-  while datetime.now() < TimeEnd:
-    sleep(timeBetween)
-    takePhoto(cam, directory)
-    NumPhotos += 1
-    if NumPhotos%10 == 0:
-      # Every 10 photos, upload to dropbox.
-      # Ideally I'd just install dropbox and ensure that the appropriate
-      # directory was symbolically linked to dropbox, but unfortunately dropbox
-      # is not available for the RaspberryPI (or atleast, not for Raspbian), so
-      # this next step is neccesary.
-      pass
+  if timeBetween > timeFor:
+    upLoadToDropBox(directory)
+    sleep(timeFor)
+  else:
+    while datetime.now() < TimeEnd:
+      sleep(timeBetween)
+      takePhoto(cam, directory)
+      NumPhotos += 1
+      if NumPhotos%10 == 0:
+        # Every 10 photos, upload to dropbox.
+        # Ideally I'd just install dropbox and ensure that the appropriate
+        # directory was symbolically linked to dropbox, but unfortunately dropbox
+        # is not available for the RaspberryPI (or atleast, not for Raspbian), so
+        # this next step is neccesary.
+        upLoadToDropBox(directory)
   cam.stop()
+  upLoadToDropBox(directory)
   print('Done. Took {} photos.'.format(NumPhotos))
   
   
 def takePhoto(cam, directory):
   img = cam.get_image()
   image.save(img, "{}/p{}.jpg".format(directory, datetime.now().strftime('%Y%m%d%H%M%S')))
+
+def upLoadToDropBox(directory):
+  pass
 
 if __name__ == '__main__':
   print('Programme started on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')))
@@ -211,11 +223,12 @@ if __name__ == '__main__':
     # Check the alarm status.
     try:
       status, age = assessAlarmStatus(GMAIL)
-    except Exception as E:
-      print(type(E))
-      print(E.args)
-      print(E)
-      raise(E)
+    except ssl.SSLError as E:
+      if E.args[0] == 'The read operation timed out':
+        print('\nThe read operation timed out')
+        GMAIL = createServiceGMAIL()
+      else:
+        raise(E)
       
     if (age > maxAge) or (status in ["DisArm", "Arm", "HomeArm", "TestEnd"]):
       # Nothing happening, carry on.
@@ -238,6 +251,7 @@ if __name__ == '__main__':
       else:
         saveDirectoryToUse = saveDirectory_N;
       takePhotos(saveDirectoryToUse, timeBetween=2**statusTimes, timeFor=takePhotosFor*60)
+      statusLast = status;
     stdout.flush()
-    statusLast = status;
+    
         
