@@ -180,7 +180,8 @@ def takePhotos(directory, timeBetween=1, timeFor=60):
       sleep(timeBetween)
       takePhoto(cam, directory)
       NumPhotos += 1
-      upLoadToDropBox(directory)
+      if NumPhotos%5 == 0:
+        upLoadToDropBox(directory)
   if Pi:
     cam.stop_preview()
   else:
@@ -198,11 +199,12 @@ def takePhoto(cam, directory):
     image.save(img, FileName)
 
 def upLoadToDropBox(directory):
-  
-  LastBit = path.basename(path.normpath(directory))
-  ToDir = socket.gethostname() + '/' + LastBit + '/'
-  dropboxCommand = dropBoxUploader + ' upload -s ' + directory + '/* ' + ToDir
-  Popen(dropboxCommand, shell=True)  
+  gotInternet = checkInternet()
+  if gotInternet:
+    LastBit = path.basename(path.normpath(directory))
+    ToDir = socket.gethostname() + '/' + LastBit + '/'
+    dropboxCommand = dropBoxUploader + ' upload -s ' + directory + '/* ' + ToDir
+    Popen(dropboxCommand, shell=True)  
 
 if __name__ == '__main__':
   print('Programme started on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')))
