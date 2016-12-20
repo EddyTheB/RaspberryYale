@@ -60,7 +60,10 @@ def listMessages(service, user_id, sender=None, subject=None, newer_than=None, t
       page_token = response['nextPageToken'] # I think this line tells code to go to next message.
       response = service.users().messages().list(userId=user_id, q=query,
                                          pageToken=page_token).execute()
-      messages.extend(response['messages'])
+      try:
+        messages.extend(response['messages'])
+      except KeyError:
+        pass
     
     return messages
   except errors.HttpError, error:
@@ -264,7 +267,6 @@ if __name__ == '__main__':
       elif status == "NoInternet":
         print('\nInternet Down on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')))
         saveDirectory_N = '{}/R{}_IntDown'.format(saveDirectory, datetime.now().strftime('%Y%m%d%H%M%S'))
-      print(status, statusLast)
       if statusLast == status:
         statusTimes += 1
       else:
