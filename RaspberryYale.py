@@ -1,16 +1,18 @@
 from __future__ import print_function
 from sys import stdout
-from os import makedirs
-from os.path import expanduser, exists
+from os import makedirs, path
 from time import sleep
 from datetime import datetime, timedelta
 from apiclient import discovery, errors
 from httplib2 import Http
 from oauth2client import file, client, tools
+from subprocess import Popen
 import socket, ssl
 from pygame import camera, image
+from multiprocessing import Process
 import re
-homeDir = expanduser('~')
+homeDir = path.expanduser('~')
+dropBoxUploader = homeDir + '/Documents/Development/Dropbox-Uploader/dropbox_uploader.sh'
 
 def checkInternet(host="8.8.8.8", port=53, timeout=3):
   """
@@ -152,7 +154,7 @@ def takePhotos(directory, timeBetween=1, timeFor=60):
   else:
     print('Taking 1 photo every {} seconds for up to {} seconds.'.format(timeBetween, timeFor))
   print('Saving them to {}.'.format(directory))
-  if not exists(directory):
+  if not path.exists(directory):
     makedirs(directory)
   TimeEnd = datetime.now() + timedelta(seconds=timeFor) 
   camera.init()
@@ -168,13 +170,7 @@ def takePhotos(directory, timeBetween=1, timeFor=60):
       sleep(timeBetween)
       takePhoto(cam, directory)
       NumPhotos += 1
-      if NumPhotos%10 == 0:
-        # Every 10 photos, upload to dropbox.
-        # Ideally I'd just install dropbox and ensure that the appropriate
-        # directory was symbolically linked to dropbox, but unfortunately dropbox
-        # is not available for the RaspberryPI (or atleast, not for Raspbian), so
-        # this next step is neccesary.
-        upLoadToDropBox(directory)
+      upLoadToDropBox(directory)
   cam.stop()
   upLoadToDropBox(directory)
   print('Done. Took {} photos.'.format(NumPhotos))
@@ -185,7 +181,11 @@ def takePhoto(cam, directory):
   image.save(img, "{}/p{}.jpg".format(directory, datetime.now().strftime('%Y%m%d%H%M%S')))
 
 def upLoadToDropBox(directory):
-  pass
+  
+  LastBit = path.basename(path.normpath(directory))
+  ToDir = socket.gethostname() + '/' + LastBit + '/'
+  dropboxCommand = dropBoxUploader + ' upload -s ' + directory + '/* ' + ToDir
+  Popen(dropboxCommand, shell=True)  
 
 if __name__ == '__main__':
   print('Programme started on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')))
