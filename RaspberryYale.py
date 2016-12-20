@@ -8,8 +8,13 @@ from httplib2 import Http
 from oauth2client import file, client, tools
 from subprocess import Popen
 import socket, ssl
-from pygame import camera, image
-from multiprocessing import Process
+try:
+  from picamera import PiCamera
+  Pi = True
+except ImportError:
+  from pygame import camera, image
+  Pi = False
+#from multiprocessing import Process
 import re
 homeDir = path.expanduser('~')
 dropBoxUploader = homeDir + '/Documents/Development/Dropbox-Uploader/dropbox_uploader.sh'
@@ -156,10 +161,15 @@ def takePhotos(directory, timeBetween=1, timeFor=60):
   print('Saving them to {}.'.format(directory))
   if not path.exists(directory):
     makedirs(directory)
-  TimeEnd = datetime.now() + timedelta(seconds=timeFor) 
-  camera.init()
-  cam = camera.Camera(camera.list_cameras()[0])
-  cam.start()
+  TimeEnd = datetime.now() + timedelta(seconds=timeFor)
+  if Pi:
+    cam = PiCamera()
+    cam.start_preview()
+  else:
+    camera.init()
+    cam = camera.Camera(camera.list_cameras()[0])
+    cam.start()
+    
   takePhoto(cam, directory)
   NumPhotos = 1
   if timeBetween > timeFor:
@@ -171,14 +181,21 @@ def takePhotos(directory, timeBetween=1, timeFor=60):
       takePhoto(cam, directory)
       NumPhotos += 1
       upLoadToDropBox(directory)
-  cam.stop()
+  if Pi:
+    cam.stop_preview()
+  else:
+    cam.stop()
   upLoadToDropBox(directory)
   print('Done. Took {} photos.'.format(NumPhotos))
   
   
 def takePhoto(cam, directory):
-  img = cam.get_image()
-  image.save(img, "{}/p{}.jpg".format(directory, datetime.now().strftime('%Y%m%d%H%M%S')))
+  FileName = "{}/p{}.jpg".format(directory, datetime.now().strftime('%Y%m%d%H%M%S'))
+  if Pi:
+    cam.capture(FileName)
+  else:     
+    img = cam.get_image()
+    image.save(img, FileName)
 
 def upLoadToDropBox(directory):
   
