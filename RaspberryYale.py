@@ -228,7 +228,7 @@ if __name__ == '__main__':
     saveDirectory = args[args.index('saveDirectory') + 1]
   else:
     saveDirectory = homeDir + '/Pictures/Apps/RaspberryYale'    
-  if 'takeSingle' in args:
+  if '--takeSingle' in args:
     cam = initCamera()
     FN = takePhoto(cam, saveDirectory)  
     closeCamera(cam)
@@ -247,10 +247,7 @@ if __name__ == '__main__':
     cancelTime = 10 # Minutes
   print('Triggers more than {} minutes old will be ignored.'.format(cancelTime))            
   maxAge = timedelta(minutes=cancelTime)
-  print('Photos will be saved in {}.'.format(saveDirectory))            
-    
-  exit()
-  
+  print('Photos will be saved in {}.'.format(saveDirectory))  
   
   # Want read only access to my 'stuff' gmail account.
   SCOPES = 'https://www.googleapis.com/auth/gmail.readonly'
