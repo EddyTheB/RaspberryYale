@@ -1,5 +1,5 @@
 from __future__ import print_function
-from sys import stdout
+from sys import stdout, argv
 from os import makedirs, path
 from time import sleep
 from datetime import datetime, timedelta
@@ -156,6 +156,22 @@ def assessAlarmStatus(service):
           else:
             continue
       
+def initCamera():
+  if Pi:      
+    cam = PiCamera()
+    cam.start_preview()
+  else:
+    camera.init()
+    cam = camera.Camera(camera.list_cameras()[0])
+    cam.start()
+  return cam
+  
+def closeCamera(cam):
+  if Pi:
+    cam.stop_preview()
+  else:
+    cam.stop()  
+      
 def takePhotos(directory, timeBetween=1, timeFor=60):
   if timeBetween > timeFor:
     print('Taking 1 photo and pausing for {} seconds.'.format(timeFor))
@@ -165,14 +181,7 @@ def takePhotos(directory, timeBetween=1, timeFor=60):
   if not path.exists(directory):
     makedirs(directory)
   TimeEnd = datetime.now() + timedelta(seconds=timeFor)
-  if Pi:
-    cam = PiCamera()
-    cam.start_preview()
-  else:
-    camera.init()
-    cam = camera.Camera(camera.list_cameras()[0])
-    cam.start()
-    
+  cam = initCamera()
   takePhoto(cam, directory)
   NumPhotos = 1
   if timeBetween > timeFor:
@@ -185,14 +194,10 @@ def takePhotos(directory, timeBetween=1, timeFor=60):
       NumPhotos += 1
       if NumPhotos%5 == 0:
         upLoadToDropBox(directory)
-  if Pi:
-    cam.stop_preview()
-  else:
-    cam.stop()
+  closeCamera(cam)
   upLoadToDropBox(directory)
   print('Done. Took {} photos.'.format(NumPhotos))
-  
-  
+    
 def takePhoto(cam, directory):
   FileName = "{}/p{}.jpg".format(directory, datetime.now().strftime('%Y%m%d%H%M%S'))
   if Pi:
@@ -200,21 +205,53 @@ def takePhoto(cam, directory):
   else:     
     img = cam.get_image()
     image.save(img, FileName)
-
-def upLoadToDropBox(directory):
+  return FileName
+  
+def upLoadToDropBox(source):
   gotInternet = checkInternet()
   if gotInternet:
-    LastBit = path.basename(path.normpath(directory))
-    ToDir = socket.gethostname() + '/' + LastBit + '/'
-    dropboxCommand = dropBoxUploader + ' upload -s ' + directory + '/* ' + ToDir
+    LastBit = path.basename(path.normpath(source))
+    # Check, is a directory
+    if path.isdir(source):      
+      ToDir = socket.gethostname() + '/' + LastBit + '/'
+      dropboxCommand = dropBoxUploader + ' upload -s ' + source + '/* ' + ToDir
+    elif path.isfile(source):
+      ToFile = socket.gethostname() + '/' + LastBit
+      dropboxCommand = dropBoxUploader + ' upload ' + source + ' ' + ToFile
     Popen(dropboxCommand, shell=True)  
 
 if __name__ == '__main__':
   print('Programme started on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')))
   
-  takePhotosFor = 1 # Minutes
-  cancelTime = 10   # Minutes
-  maxAge = timedelta(minutes=cancelTime) 
+  args = argv[1:]
+  if 'saveDirectory' in args:
+    saveDirectory = args[args.index('saveDirectory') + 1]
+  else:
+    saveDirectory = homeDir + '/Pictures/Apps/RaspberryYale'    
+  if 'takeSingle' in args:
+    cam = initCamera()
+    FN = takePhoto(cam, saveDirectory)  
+    closeCamera(cam)
+    print('Single image captured and saved as {}.'.format(FN))
+    print('Uploading to dropbox.')
+    upLoadToDropBox(FN)
+    exit()
+  if 'takePhotosFor' in args:
+    takePhotosFor = args[args.index('takePhotosFor') + 1]
+  else:
+    takePhotosFor = 1 # Minutes
+  print('When a trigger is detected, photos will be taken for {} minutes.'.format(takePhotosFor))        
+  if 'cancelTime' in args:
+    cancelTime = args[args.index('cancelTime') + 1]
+  else:
+    cancelTime = 10 # Minutes
+  print('Triggers more than {} minutes old will be ignored.'.format(cancelTime))            
+  maxAge = timedelta(minutes=cancelTime)
+  print('Photos will be saved in {}.'.format(saveDirectory))            
+    
+  exit()
+  
+  
   # Want read only access to my 'stuff' gmail account.
   SCOPES = 'https://www.googleapis.com/auth/gmail.readonly'
 
@@ -232,9 +269,6 @@ if __name__ == '__main__':
     print('No internet connection.')
     exit()
   GMAIL = createServiceGMAIL()
-
-  # Define a save directory
-  saveDirectory = homeDir + '/Pictures/Apps/RaspberryYale'
 
   statusTimes = 0
   statusLast = 'random'
