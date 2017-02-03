@@ -33,7 +33,7 @@ def checkInternet(host="8.8.8.8", port=53, timeout=3):
   except: #Exception as ex:
     #print(ex.message)
     return False
-    
+
 def createServiceGMAIL():
   print('Creating new GMAIL service.')
   a = discovery.build('gmail', 'v1', http=creds.authorize(Http()))
@@ -49,13 +49,13 @@ def listMessages(service, user_id, sender=None, subject=None, newer_than=None, t
     query = query + ' newer_than:' + newer_than
   if text:
     query = query + ' ' + text
-    
+
   try:
     response = service.users().messages().list(userId=user_id,q=query).execute()
     messages = []
     if 'messages' in response:
       messages.extend(response['messages'])
-    
+
     while 'nextPageToken' in response:
       page_token = response['nextPageToken'] # I think this line tells code to go to next message.
       response = service.users().messages().list(userId=user_id, q=query,
@@ -64,11 +64,11 @@ def listMessages(service, user_id, sender=None, subject=None, newer_than=None, t
         messages.extend(response['messages'])
       except KeyError:
         pass
-    
+
     return messages
   except errors.HttpError, error:
     print('An error occurred: %s' % error)
-  
+
 def checkMessages(service, GotMessageIDs=[]):
   if not checkInternet():
     return None, 'NoInternet'
@@ -79,14 +79,14 @@ def checkMessages(service, GotMessageIDs=[]):
     if messageID not in GotMessageIDs:
       return messageID, 'Real'
   testmessages = listMessages(GMAIL, 'me', newer_than='1d', text='"RaspberryYale System Test"')
-  
+
   if testmessages:
     message = testmessages[1]
     messageID = message['id']
     if messageID not in GotMessageIDs:
       return messageID, 'Test'
   return None, None
-  
+
 def assessAlarmStatus(service):
   if not checkInternet():
     return 'NoInternet', timedelta(minutes=0)
@@ -106,8 +106,9 @@ def assessAlarmStatus(service):
   messages = listMessages(service, 'me')
   for message in messages:
     messageID = message['id']
+    print(messageID)
     messageGot = service.users().messages().get(userId='me', id=messageID).execute()
-
+    print(messageGot['payload']['headers'])
     # Ensure that the sender is one of the allowed Senders.
     # Ensure that the Subject is one of the allowd Subjects.
     # If not either of those, then look at the next email untill one is found.
@@ -131,9 +132,9 @@ def assessAlarmStatus(service):
     #print(Date[:25])
     #print(datetime.now().strftime('%a, %d %b %Y %H:%M:%S %z'))
     #print('ssss')
-    Date = datetime.strptime(Date[:25], '%a, %d %b %Y %H:%M:%S')
+    Date = datetime.strptime(Date[:25].strip(), '%a, %d %b %Y %H:%M:%S')
     Age = datetime.now() - Date
-      
+
     if True: #From in allowedSenders:
       if Subject in allowedSubjects:
         # Check snippet contents. They're short emails so the snippets are plenty.
@@ -155,9 +156,9 @@ def assessAlarmStatus(service):
               return Type, Age
           else:
             continue
-      
+
 def initCamera():
-  if Pi:      
+  if Pi:
     cam = PiCamera()
     cam.start_preview()
   else:
@@ -165,13 +166,13 @@ def initCamera():
     cam = camera.Camera(camera.list_cameras()[0])
     cam.start()
   return cam
-  
+
 def closeCamera(cam):
   if Pi:
     cam.stop_preview()
   else:
-    cam.stop()  
-      
+    cam.stop()
+
 def takePhotos(directory, timeBetween=1, timeFor=60):
   if timeBetween > timeFor:
     print('Taking 1 photo and pausing for {} seconds.'.format(timeFor))
@@ -197,40 +198,40 @@ def takePhotos(directory, timeBetween=1, timeFor=60):
   closeCamera(cam)
   upLoadToDropBox(directory)
   print('Done. Took {} photos.'.format(NumPhotos))
-    
+
 def takePhoto(cam, directory):
   FileName = "{}/p{}.jpg".format(directory, datetime.now().strftime('%Y%m%d%H%M%S'))
   if Pi:
     cam.capture(FileName)
-  else:     
+  else:
     img = cam.get_image()
     image.save(img, FileName)
   return FileName
-  
+
 def upLoadToDropBox(source):
   gotInternet = checkInternet()
   if gotInternet:
     LastBit = path.basename(path.normpath(source))
     # Check, is a directory
-    if path.isdir(source):      
+    if path.isdir(source):
       ToDir = socket.gethostname() + '/' + LastBit + '/'
       dropboxCommand = dropBoxUploader + ' upload -s ' + source + '/* ' + ToDir
     elif path.isfile(source):
       ToFile = socket.gethostname() + '/' + LastBit
       dropboxCommand = dropBoxUploader + ' upload ' + source + ' ' + ToFile
-    Popen(dropboxCommand, shell=True)  
+    Popen(dropboxCommand, shell=True)
 
 if __name__ == '__main__':
   print('Programme started on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')))
-  
+
   args = argv[1:]
   if 'saveDirectory' in args:
     saveDirectory = args[args.index('saveDirectory') + 1]
   else:
-    saveDirectory = homeDir + '/Pictures/Apps/RaspberryYale'    
+    saveDirectory = homeDir + '/Pictures/Apps/RaspberryYale'
   if '--takeSingle' in args:
     cam = initCamera()
-    FN = takePhoto(cam, saveDirectory)  
+    FN = takePhoto(cam, saveDirectory)
     closeCamera(cam)
     print('Single image captured and saved as {}.'.format(FN))
     print('Uploading to dropbox.')
@@ -240,20 +241,21 @@ if __name__ == '__main__':
     takePhotosFor = args[args.index('takePhotosFor') + 1]
   else:
     takePhotosFor = 1 # Minutes
-  print('When a trigger is detected, photos will be taken for {} minutes.'.format(takePhotosFor))        
+  print('When a trigger is detected, photos will be taken for {} minutes.'.format(takePhotosFor))
   if 'cancelTime' in args:
     cancelTime = args[args.index('cancelTime') + 1]
   else:
     cancelTime = 10 # Minutes
-  print('Triggers more than {} minutes old will be ignored.'.format(cancelTime))            
+  print('Triggers more than {} minutes old will be ignored.'.format(cancelTime))
   maxAge = timedelta(minutes=cancelTime)
-  print('Photos will be saved in {}.'.format(saveDirectory))  
-  
+  print('Photos will be saved in {}.'.format(saveDirectory))
+
   # Want read only access to my 'stuff' gmail account.
   SCOPES = 'https://www.googleapis.com/auth/gmail.readonly'
 
   # Get the OAuth2 credentials
-  secretFile =  homeDir + '/.api/AlphonsoOak.json'
+  secretFile =  homeDir + '/.keys/AlphonsoOak.json'
+  print(secretFile)
   store = file.Storage('storage.json')
   creds = store.get()
   if not creds or creds.invalid:
@@ -282,19 +284,19 @@ if __name__ == '__main__':
         GMAIL = createServiceGMAIL()
       else:
         raise(E)
-      
+
     if (age > maxAge) or (status in ["DisArm", "Arm", "HomeArm", "TestEnd"]):
       # Nothing happening, carry on.
-      print('Checked and found nothing on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')), end='\r')      
+      print('Checked and found nothing on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')), end='\r')
       statusTimes = 0
       statusLast = 'random'
     else:
       if status == "Burglar":
-        print('\nBurglar detected on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')))        
+        print('\nBurglar detected on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')))
         saveDirectory_N = '{}/R{}_Burgler'.format(saveDirectory, datetime.now().strftime('%Y%m%d%H%M%S'))
       elif status == "TestStart":
         print('\nTest message detected on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')))
-        saveDirectory_N = '{}/R{}_Test'.format(saveDirectory, datetime.now().strftime('%Y%m%d%H%M%S'))      
+        saveDirectory_N = '{}/R{}_Test'.format(saveDirectory, datetime.now().strftime('%Y%m%d%H%M%S'))
       elif status == "NoInternet":
         print('\nInternet Down on {}.'.format(datetime.now().strftime('%Y %b %d at %H:%M:%S')))
         saveDirectory_N = '{}/R{}_IntDown'.format(saveDirectory, datetime.now().strftime('%Y%m%d%H%M%S'))
@@ -305,5 +307,3 @@ if __name__ == '__main__':
       takePhotos(saveDirectoryToUse, timeBetween=2**statusTimes, timeFor=takePhotosFor*60)
       statusLast = status;
     stdout.flush()
-    
-        
