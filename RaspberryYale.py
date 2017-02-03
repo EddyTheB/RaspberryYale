@@ -106,9 +106,7 @@ def assessAlarmStatus(service):
   messages = listMessages(service, 'me')
   for message in messages:
     messageID = message['id']
-    print(messageID)
     messageGot = service.users().messages().get(userId='me', id=messageID).execute()
-    print(messageGot['payload']['headers'])
     # Ensure that the sender is one of the allowed Senders.
     # Ensure that the Subject is one of the allowd Subjects.
     # If not either of those, then look at the next email untill one is found.
@@ -255,7 +253,6 @@ if __name__ == '__main__':
 
   # Get the OAuth2 credentials
   secretFile =  homeDir + '/.keys/AlphonsoOak.json'
-  print(secretFile)
   store = file.Storage('storage.json')
   creds = store.get()
   if not creds or creds.invalid:
